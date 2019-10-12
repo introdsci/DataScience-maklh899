@@ -10,7 +10,6 @@ output:
 
 The San Francisco City Employee Compensation dataset has a record of about 102,660 employees. The amount of salary, benefits, and compensation they receive depend on their job and what departments it lies under.
 
-In under 250 words give a brief summary of the project so far.
 
 ### 1. Discovery and Data Preparation
 
