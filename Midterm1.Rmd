@@ -1,0 +1,129 @@
+---
+title: "Midterm Bookstore"
+author: "Makena Haroldson"
+date: "October 15, 2019"
+output:
+  html_document:
+    df_print: paged
+---
+
+### Part 1: Import Data
+
+To begin, we need to import the data but first we need to import some libraries which will allow us to organize and edit data.
+```{r}
+suppressMessages(library("tidyverse"))
+suppressMessages(library("dplyr"))
+suppressMessages(library("tidyr"))
+suppressMessages(library("ggplot2"))
+
+#values in register are "--", so we overide them as NA(Not Available)
+Register<- read_csv("register.csv", na = "--")
+Sales<- read_csv("sales.csv")
+
+View(Register)
+View(Sales)
+```
+
+
+### Part 2: Clean Data
+
+#### **Register Table**
+
+Column names of Register are inconsistent with each other so we will change the names of them. Costumer_type is filled with 0 and 1 as values so we can change it's column type to a logical type. We will also categorize some columns so we can easily handle the data later on.
+```{r}
+colnames(Register)
+
+#Renaming
+colnames(Register)[colnames(Register)=="is the customer a student/faculty/staff (0) or unaffiliated (1)"] <- "customer_type"
+colnames(Register)[colnames(Register)=="item"] <- "item_id"
+colnames(Register)[colnames(Register)=="customer id"] <- "customer_id"
+colnames(Register)[colnames(Register)=="contact preference"] <- "contact_preference"
+colnames(Register)[colnames(Register)=="preferred customer discount"] <- "customer_discount"
+
+#Changing type to logical
+Register$customer_type<- as.logical(as.integer(Register$customer_type))
+
+#Grouping
+Register <- Register %>% mutate(charge=as.factor(charge), contact_preference=as.factor(contact_preference))
+
+levels(Register$charge)
+levels(Register$contact_preference)
+```
+
+
+#### **Sales Table**
+
+Just like how we handled the Register table, we will do the same with the Sales tabe
+```{r}
+colnames(Sales)
+
+#Renaming 
+colnames(Sales)[colnames(Sales)=="category of inventory goods"] <- "inventory_type"
+
+#Grouping
+Sales <- Sales %>% mutate(inventory_type=as.factor(inventory_type))
+levels(Sales$inventory_type)
+```
+
+
+### Part 3: Tidy Data
+
+We will need to organize the data to make values and columns to be easy to read and allow us to get proper data from the tables. For the Sales table we need to collect the columns of the "month and year" into one columns and then seperate its values into "month" and "year" columns. After we will make new tables (Customer and Register_Checkout) to separate the Register table to have similar information with each other.
+
+```{r}
+#Collecting and seperating columns
+Sales <- Sales %>% gather( key = "sale_year", value = "sale", 2:23)
+Sales <- Sales %>% separate(sale_year, into = c("sale_month", "sale_year"), sep="-")
+
+Sales
+
+#Making new tables
+Register_Checkout <- tibble(`purchase`= Register$purchase, `item_id`=Register$item_id, `price`=Register$price, `customer_id`=Register$customer_id, `charge`=Register$charge, `receipt`=Register$receipt)
+
+Register_Checkout
+
+Customer <- tibble(`customer_id`= Register$customer_id, `customer_type` = Register$customer_type, `contact_preference` = Register$contact_preference, `newsletter` =  Register$newsletter, `sales` = Register$sales, `customer_discount` = Register$customer_discount)
+
+#Customer has duplicates
+Customer<- distinct(Customer, .keep_all = TRUE)
+Customer<- na.omit(Customer)
+
+Customer
+```
+
+
+### Part 4: Summarization and Visualization
+
+To easily observe what products of the store have been selling more we can look at the graph below. Note that items are counted twice because of cost and tax so we filtered out tax to count an item once. We also catorgorized item_id to allow the graph to count the items.
+```{r}
+#Filtering
+item_count <-  Register_Checkout %>%  group_by(item_id) %>% filter(charge == "cost")
+
+#Categorizing
+item_count$item_id <- as.factor(item_count$item_id)
+
+item_count
+
+item_plot <- ggplot(item_count, aes(item_id)) + geom_histogram(stat="count") + theme(axis.text.x = element_text(size=10,  color = "black"))
+
+item_plot
+```
+
+
+We can look at the sales of textbooks and compare 2018 and 2019 sales. Looking the graph we can see the sales were very similar, however during the summer of 2019, the sales of textbooks were lower.
+```{r}
+#Filtering
+sales_total <-  Sales %>%  group_by(inventory_type) %>% filter(inventory_type == "textbooks") 
+
+#Ordering the months
+sales_total$sale_month <- as.integer(as.character(sales_total$sale_month))
+sales_total <- sales_total[order(sales_total$sale_month),]
+
+sales_total
+
+sales_plot <- ggplot(sales_total, aes(sale_month, sale, color = sale_year)) + geom_line() + scale_x_discrete(name = "months", breaks = seq(1, 12, by = 1), limits =seq(1, 12, by = 1))
+
+sales_plot
+
+```
+
