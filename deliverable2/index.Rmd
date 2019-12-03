@@ -343,7 +343,7 @@ Earnings_extended <- full_join(ave_other_ben, Earnings_extended, by = "Job Code"
 Earnings_extended <- full_join(ave_ben, Earnings_extended, by = "Job Code", copy = FALSE )
 Earnings_extended <- full_join(ave_comp, Earnings_extended, by = "Job Code", copy = FALSE )
 
-Earnings_extended
+head(Earnings_extended)
 ```
 
 
