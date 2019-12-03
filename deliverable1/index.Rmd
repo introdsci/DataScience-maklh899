@@ -134,3 +134,32 @@ Total_OEmployee_graph <- ggplot(Total_OEmployee, aes(x = `Organization Group`, y
 
 Total_OEmployee_graph
 ```
+
+
+The data set also shows the earnings of each of Employee from the years 2019 to 2013. This includes their Total Salaries, Total Compensations, and Total Benefits. The average Total Salary that all employees are paid is \$50354 while the highest amount one is \$393158. For Total Benefits, the average is \$19738 and the max is \$108384, while Total Compensation has the average of \$70114  and the max of \$501542. In the graph below, we can look at the average  Total Salary each employee makes and observe that most city are making between \$0 to $100,000 a year.
+*NOTE: We did not include submissions that have a negative Total Salary.
+```{r}
+
+Total_Salary_Ave <- Employee_Compensation%>%  group_by(`Employee Identifier`, `Job Code`) %>% filter(`Total Salary` >= 0 & !is.nan(`Total Salary`)) %>% summarise(`Salary Mean` = mean(`Total Salary`, na.rm=T))
+
+Total_Salary_Ave
+
+Total_Salary_Ave_Graph <- ggplot(data = Total_Salary_Ave, aes(`Salary Mean`)) + geom_area(stat = "bin", binwidth = 100000, fill = "darkblue") +  scale_x_continuous(name = "The Mean of the Total Salary of a Employee", breaks= waiver(), labels = comma,limits = c(0,400000)) + scale_y_continuous(name="The Amount of People", breaks= waiver(), label = comma) + theme(axis.text.x = element_text(color = "black"), panel.background = element_rect(color = "black" , size = 1))
+
+Total_Salary_Ave_Graph
+
+```
+
+
+### _**Part 5: Research Questions**_
+
+Some research questions I hope to answer in the future:
+
+1. What is the best San Francisco city job to work for? 
+This questions sounds easy to answer but there are different factors of a job that comes in such as time and work one puts into it, as well as the level of difficulty and dangers of it.
+
+2. What main factors of a job will make people want to work for the city of San Francisco and how could we promote these city jobs? 
+What is difficult about answering this questions is that many different reasons why someone would work for the city, it may because they wanted desired to have a specific job, such as a police officer, or they wanted to stay in San Francisco to live and have a family.
+
+3. How can the city gain more money to finance their jobs, what actions could they take to give workers more benfits?
+This may be a more political questions as the government would be making the final decesions.
