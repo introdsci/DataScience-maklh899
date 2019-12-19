@@ -1,5 +1,5 @@
 ---
-title: "SF City Employee Compensation"
+title: "SF City Employee Compensation Part 2"
 author: "Makena Haroldson"
 date: "December 3, 2019"
 output:
@@ -8,13 +8,13 @@ output:
 ---
 
 ### _**PREDICTIONS:**_
-In this project I would like to predict a person's total benefit based off their job. These predictions may help find the reason why a certain job/organization is more popular than others. From these predictions, we can make hopefully make positive changes to help the growth of city jobs.
+In this project I would like to predict a person's total benefit based off their job. These predictions may help find the reason why a certain job/organization is more popular than others. From these predictions, we can hopefully make positive changes to help the growth of city jobs.
 
 ### _**Part 1: Loading Data From Second Source:**_
 
 **Step 1: Importing Libraries and Previous Deliverable**
 
-Like we did before, we need to import the data but this time we are taking it from San Francisco City Job's  posting website [link](www.jobapscloud.com/SF/). We also need to download more libraries to be able to do certain functions, as well as connect our first deliverable to this one.
+Like we did before, we need to import the data but this time we are taking it from San Francisco City Job's posting website [link](www.jobapscloud.com/SF/). We are using this website as it shows which jobs have an hourly, monthly, or annual income. This information will allow us to compare compensation between hourly and annually paying jobs, as well as, show the increase and decrease of job opening of organization which could effect the popularity of SF city job's. We also need to download more libraries to be able to do certain functions, as well as connect our first deliverable to this one.
 ```{r}
 
 include <- function(library_name){
@@ -29,6 +29,8 @@ suppressMessages(include("rvest"))
 suppressMessages(include("tidyr"))
 suppressMessages(include("naniar"))
 suppressMessages(include("caret"))
+suppressMessages(include("varhandle"))
+suppressMessages(include("interactions"))
 
 #links our first deliverable here
 suppressMessages(purl("deliverable1.Rmd", output = "part1.r"))
@@ -41,7 +43,7 @@ SFJob_posts_html <- read_html(SFJob_posts_url, options = "HUGE")
 
 **Step 2: Importing Website Data Into Tables**
 
-Now we need read in the website's data and import it into a table called Job_listing. On the website, rows were labeled as "even" or "odd" so we need to import both and do some maintenance to them.
+Now we need to read in the website's data and import it into a table called Job_listing. On the website, rows were labeled as "even" or "odd" so we need to import both and do some maintenance to them.
 *NOTE: Some job titles have more then one job code in it so we will be using the first one
 ```{r}
 #Gets each "odd" rows
@@ -84,7 +86,7 @@ job_title_o <- job_title_o%>%
               str_replace("(^([0-9]|[A-Z]){4} - )|(^([0-9]|[A-Z]){4} )", "")%>%
               str_trim(side = c("right"))
 
-#table of odd rows
+#table of odd rowsc
 Job_listing_o <- tibble(Code=job_code_o, Title=job_title_o, Department=job_dept_o, Salary=job_sal_o) 
 
 ```
@@ -144,7 +146,8 @@ Job_listing
 
 ### _**Part 2: Organizing Data**_
 
-Once our table is made we need to organize our Salary column so we can easily use it later on. First we need change some of its values as they are formatted differently than all the other rows.
+Once our table is made we need to organize our Salary column so we can easily use it later on. First we need change some of its values as they are formatted differently than all the other rows. We want the Salary values to have "hour", "month", "year", or nothing at the end of them, instead of "annualized" or other labels. Because this data is coming from a maintained website that will be constantly making updates, it will be hard to catch every single outlier, but these are the few that we did find.
+*Note: Some job listings have a salary that is bi-weekly, however, we will not adding them into the dataset.
 ```{r}
 salary_index1 <- Job_listing$Salary %>% 
               str_which("ï¿½")
@@ -154,7 +157,6 @@ Job_listing$Salary[salary_index1] <- Job_listing$Salary[salary_index1] %>%
               str_replace("\\/Hour.","\\/hour;")
 Job_listing$Salary[salary_index1] <- Job_listing$Salary[salary_index1] %>% 
               str_replace("\\/Annual.","00\\/year")
-Job_listing$Salary[salary_index1]
 
 salary_index2 <- Job_listing$Salary %>% 
               str_which(" Hourly")
@@ -162,7 +164,6 @@ Job_listing$Salary[salary_index2] <- Job_listing$Salary[salary_index2] %>%
               str_replace(" Hourly","/hour")
 Job_listing$Salary[salary_index2] <- Job_listing$Salary[salary_index2]%>% 
               str_replace(" Annual.","/year")
-Job_listing$Salary[salary_index2]
 
 salary_index3 <- Job_listing$Salary %>% 
               str_which("hourly;")
@@ -170,7 +171,6 @@ Job_listing$Salary[salary_index3] <- Job_listing$Salary[salary_index3] %>%
               str_replace("hourly;","hour;")
 Job_listing$Salary[salary_index3] <- Job_listing$Salary[salary_index3] %>% 
               str_replace(" annually ",".00\\/year")
-Job_listing$Salary[salary_index3]
 
 salary_index4 <- Job_listing$Salary %>% 
               str_which("\\/hourly")
@@ -183,7 +183,7 @@ Job_listing$Salary[salary_index5] <- Job_listing$Salary[salary_index5] %>%
               str_replace(" per Hour ","\\/hour")
 
 salary_index6 <- Job_listing$Salary %>% 
-              str_which("bi-weekly")
+              str_which("bi-weekly,")
 Job_listing$Salary[salary_index6] <- Job_listing$Salary[salary_index6] %>% 
               str_replace(", \\$4,631-6,063\\/bi-weekly,","; ;") %>%
               str_replace(" until 12/28/2019 ","")
@@ -191,52 +191,70 @@ Job_listing$Salary[salary_index6] <- Job_listing$Salary[salary_index6] %>%
 salary_index7 <- Job_listing$Salary %>% 
               str_which("based on")
 Job_listing$Salary[salary_index7] <- Job_listing$Salary[salary_index7] %>% 
-              str_replace(" \\(up to \\$276,484\\.00, based on experience\\/qualifications\\)","")
+              str_remove(" \\(up to \\$276,484\\.00, based on experience\\/qualifications\\)")
+
+salary_index8 <- Job_listing$Salary %>% 
+              str_which("Salary Range A;")
+Job_listing$Salary[salary_index8] <- Job_listing$Salary[salary_index8] %>% 
+              str_remove("Salary Range A; ") %>%
+              str_replace("hour ","hour; ")%>%
+              str_replace("annually ","year")
+
+salary_index9 <- Job_listing$Salary %>% 
+              str_which("Annualized")
+Job_listing$Salary[salary_index9] <- Job_listing$Salary[salary_index9] %>%
+              str_remove("\\$2,217 Bi-Weekly; ") %>%
+              str_replace("Annualized ","year")
+
 
 Job_listing
 ```
 
-Now we need to parse the Salary column out to make a Hr_Salary, Mo_Salary, and Yr_Salary column, but before doing so, we need the Salary column to be formatted the same. After we will parse these columns out even more to get each individual min and max columns.
-*NOTE: Some Jobs do not hav all three hourl, monthly, and yearly salaries, so we will leave those blank. 
+Now we need to parse the Salary column out to make a Hr_Salary, Mo_Salary, and Yr_Salary column, but before doing so, we need the Salary column to be formatted the same. After, because they have a range, we will parse these columns out even more to get each individual min and max columns. Some jobs do not have a range and so we will set the value given as a minumum hourly/monthly/annually salary.
+*NOTE: Some Jobs do not have all three hourly, monthly, and yearly salaries, so we will leave those blank. 
 ```{r}
-num_rows <- nrow(Job_listing)
 
-#loop through each row
-for(index in 1:num_rows)
-{  
-  if(!(str_detect(Job_listing$Salary[index], "\\/hour") & str_detect(Job_listing$Salary[index], "\\/month") & str_detect(Job_listing$Salary[index], "\\/year")))
+#function to put delimiters in rows with 
+#missing hour, month, or year values
+delimiter_placement <- function(index){
+  
+  if(!(str_detect(index, "\\/hour") & str_detect(index, "\\/month") & str_detect(index, "\\/year")))
   {
-    if(str_detect(Job_listing$Salary[index], "\\/hour") & !str_detect(Job_listing$Salary[index], "\\/month") & !str_detect(Job_listing$Salary[index], "\\/year"))
+    if(str_detect(index, "\\/hour") & !str_detect(index, "\\/month") & !str_detect(index, "\\/year"))
     {
       #has only a hourly salary
-      Job_listing$Salary[index] <-  paste(Job_listing$Salary[index], ";;")
+      index <-  paste(index, ";;")
       
-    } else if(!str_detect(Job_listing$Salary[index], "\\/hour") & !str_detect(Job_listing$Salary[index], "\\/month") & str_detect(Job_listing$Salary[index], "\\/year"))
+    } else if(!str_detect(index, "\\/hour") & !str_detect(index, "\\/month") & str_detect(index, "\\/year"))
     {
        #has only a yearly salary, append to front
-      Job_listing$Salary[index] <- paste0(";;", Job_listing$Salary[index])
+      index <- paste0(";;", index)
       
-    } else if(str_detect(Job_listing$Salary[index], "\\/hour") & !str_detect(Job_listing$Salary[index], "\\/month") & str_detect(Job_listing$Salary[index], "\\/year"))
+    } else if(str_detect(index, "\\/hour") & !str_detect(index, "\\/month") & str_detect(index, "\\/year"))
     {
       #has both hourly and yearly salary
-      Job_listing$Salary[index] <- Job_listing$Salary[index] %>% 
+      index <- index %>% 
                 str_replace("; ",";;")
       
-    } else if(!str_detect(Job_listing$Salary[index], "\\/hour") & str_detect(Job_listing$Salary[index], "\\/month") & str_detect(Job_listing$Salary[index], "\\/year"))
+    } else if(!str_detect(index, "\\/hour") & str_detect(index, "\\/month") & str_detect(index, "\\/year"))
     {
       #has both monthly and yearly salary
-      Job_listing$Salary[index] <- paste0(";", Job_listing$Salary[index])
+      index <- paste0(";", index)
     
     }  
   }
+  return(index)
 }
 
-Job_listing <- Job_listing %>% 
-              separate(Salary, into = c("Hr_Salary", "Mo_Salary", "Yr_Salary"), sep=";")
+suppressWarnings(Job_listing$Salary <- sapply(Job_listing$Salary, delimiter_placement))
 
-Job_listing <- Job_listing %>% separate(Hr_Salary, into = c("Hr_Salary_Min","Hr_Salary_Max"), sep="-")
-Job_listing <- Job_listing %>% separate(Mo_Salary, into = c("Mo_Salary_Min","Mo_Salary_Max"), sep="-")
-Job_listing <- Job_listing %>% separate(Yr_Salary, into = c("Yr_Salary_Min","Yr_Salary_Max"), sep="-")
+suppressWarnings(Job_listing <- Job_listing %>% 
+              separate(Salary, into = c("Hr_Salary", "Mo_Salary", "Yr_Salary"), sep=";"))
+
+#suppressWarnings about NAs
+suppressWarnings(Job_listing <- Job_listing %>% separate(Hr_Salary, into = c("Hr_Salary_Min","Hr_Salary_Max"), sep="-"))
+suppressWarnings(Job_listing <- Job_listing %>% separate(Mo_Salary, into = c("Mo_Salary_Min","Mo_Salary_Max"), sep="-"))
+suppressWarnings(Job_listing <- Job_listing %>% separate(Yr_Salary, into = c("Yr_Salary_Min","Yr_Salary_Max"), sep="-"))
 
 Job_listing
 
@@ -249,65 +267,84 @@ Job_listing <- replace_with_na_all(data = Job_listing, condition = ~.x == " ")
 Job_listing <- replace_with_na_all(data = Job_listing, condition = ~.x == "")
 
 #function to eliminate characters in each value
-char_delete <- function(Col){
-  num_rows2 <- nrow(Job_listing)
-  for(index2 in 1:num_rows2)
+char_delete <- function(index2){
+   
+  if (!is.na(index2))
   {
-    if (!is.na(Col[index2]))
+    if (str_detect(index2, "\\$"))
     {
-      if (str_detect(Col[index2], "\\$"))
-      {
-        Col[index2] <- Col[index2] %>% 
-                      str_replace("\\$|( \\$)","") %>%
-                      str_trim(side = c("right"))
-        if(str_detect(Col[index2], "\\/hour"))
-        {
-          Col[index2] <- Col[index2] %>% 
-                        str_replace("\\/hour","")
-        }else if(str_detect(Col[index2], "\\/month")) 
-        {
-          Col[index2] <- Col[index2] %>% 
-                        str_replace("\\/month","")
-        }else if(str_detect(Col[index2], "\\/year"))
-        {
-          Col[index2] <- Col[index2] %>% 
-                        str_replace("\\/year","")
-        }
-      }
-      if (str_detect(Col[index2], ","))
-      {
-        Col[index2] <- Col[index2] %>% 
-                      str_replace(",","")
-      }
+      
+      index2 <- index2 %>% 
+        str_remove("\\$|( \\$)")%>%
+        str_trim(side = c("right"))
+                    
+      #print(index2)
+                    
+    }
+    if(str_detect(index2, "\\/hour"))
+    {
+
+      index2 <- index2 %>% 
+          str_remove("\\/hour")
+      
+    }else if(str_detect(index2, "\\/month")) 
+    {
+
+      index2 <- index2 %>% 
+          str_remove("\\/month")
+    }else if(str_detect(index2, "\\/year"))
+    {
+      index2 <- index2 %>% 
+          str_remove("\\/year")
+    }
+    if (str_detect(index2, ","))
+    {
+      index2 <- index2 %>% 
+          str_remove(",")
     }
   }
-  return(Col)
+      
+  return(index2)
 }
 
 #sends each Salary column into the function
-Job_listing$Hr_Salary_Min <- char_delete(Col = Job_listing$Hr_Salary_Min)
-Job_listing$Hr_Salary_Max <- char_delete(Col = Job_listing$Hr_Salary_Max)
-Job_listing$Mo_Salary_Min <- char_delete(Col = Job_listing$Mo_Salary_Min)
-Job_listing$Mo_Salary_Max <- char_delete(Col = Job_listing$Mo_Salary_Max)
-Job_listing$Yr_Salary_Min <- char_delete(Col = Job_listing$Yr_Salary_Min)
-Job_listing$Yr_Salary_Max <- char_delete(Col = Job_listing$Yr_Salary_Max)
+suppressWarnings(Job_listing$Hr_Salary_Min <- sapply(Job_listing$Hr_Salary_Min, char_delete))
+suppressWarnings(Job_listing$Hr_Salary_Max <- sapply(Job_listing$Hr_Salary_Max, char_delete))
+suppressWarnings(Job_listing$Mo_Salary_Min <- sapply(Job_listing$Mo_Salary_Min, char_delete))
+suppressWarnings(Job_listing$Mo_Salary_Max <- sapply(Job_listing$Mo_Salary_Max, char_delete))
+suppressWarnings(Job_listing$Yr_Salary_Min <- sapply(Job_listing$Yr_Salary_Min, char_delete))
+suppressWarnings(Job_listing$Yr_Salary_Max <- sapply(Job_listing$Yr_Salary_Max, char_delete))
 
 #turns columns to numeric values
-Job_listing$Hr_Salary_Min = as.numeric(as.character(Job_listing$Hr_Salary_Min))
-Job_listing$Hr_Salary_Max = as.numeric(as.character(Job_listing$Hr_Salary_Max))
-Job_listing$Mo_Salary_Min = as.numeric(as.character(Job_listing$Mo_Salary_Min))
-Job_listing$Mo_Salary_Max = as.numeric(as.character(Job_listing$Mo_Salary_Max))
-Job_listing$Yr_Salary_Min = as.numeric(as.character(Job_listing$Yr_Salary_Min))
-Job_listing$Yr_Salary_Max = as.numeric(as.character(Job_listing$Yr_Salary_Max))
+Job_listing$Hr_Salary_Min <- as.numeric(as.character(Job_listing$Hr_Salary_Min))
+Job_listing$Hr_Salary_Max <- as.numeric(as.character(Job_listing$Hr_Salary_Max))
+Job_listing$Mo_Salary_Min <- as.numeric(as.character(Job_listing$Mo_Salary_Min))
+Job_listing$Mo_Salary_Max <- as.numeric(as.character(Job_listing$Mo_Salary_Max))
+Job_listing$Yr_Salary_Min <- as.numeric(as.character(Job_listing$Yr_Salary_Min))
+Job_listing$Yr_Salary_Max <- as.numeric(as.character(Job_listing$Yr_Salary_Max))
 
 #View(Job_listing)
 Job_listing
 
 ```
 
+We can also easily see the total amount of jobs that are listed per department using a graph.
+```{r}
+Job_listing$Department <- factor(Job_listing$Department)
+
+Listing_extended <- Job_listing %>%  group_by(Department) %>% summarize(Job_total = n_distinct(Code, na.rm=T))
+
+list_plot <- ggplot(Listing_extended, aes(Department, Job_total)) +  geom_col()+ scale_y_discrete(name = "Total Job Listings", breaks = seq(0, 20, by = 1), limits =seq(0, 20, by = 1))  + coord_flip()
+
+list_plot
+```
+
+
 ### _**Part 3: Modeling Data**_
 
-To create a model to see if we can predict the total benefit of each job, we need to make a table that have the averages of all the continuous data (ex. Salaries and Other Benefits) from Employee_Earnings. Before we calculate the averages, we need to eliminate the negative values as a person cannot receive a negative salry. To find the averages. After, to get the averages we will group each employee by their Job and then calculate the average.
+
+When looking at our data we just imported, we come across a problem where we cannot trace a particular job to its organization as a job can be in multiple Organization groups. Because of this, we will focus on making a model to see if we can predict the total benefit of each job. First, we need to make a table that have the averages of all the continuous data (ex. Salaries and Other Benefits) from Employee_Earnings. Before we calculate the averages, we need to eliminate the negative values as a person cannot receive a negative salary to find the averages. After, to get the averages we will group each employee by their Job and then calculate the average.
+
 ```{r}
 Earnings_filtered <- Employee_Earnings %>% 
         filter(Salaries > 0 & !is.nan(Salaries)) %>%
@@ -316,7 +353,7 @@ Earnings_filtered <- Employee_Earnings %>%
         filter(`Health and Dental` >= 0 & !is.nan(`Health and Dental`)) %>%
         filter(`Other Benefits`>= 0 & !is.nan(`Other Benefits`)) %>%
         filter(`Total Benefits`>= 0 & !is.nan(`Total Benefits`)) %>%
-        filter(`Total Compensation`>= 0 & !is.nan(`Total Compensation`))
+        filter(`Total Compensation`> 0 & !is.nan(`Total Compensation`))
 
 #gets the average of a Job's Total Compensation
 ave_sal <- aggregate(Salaries ~ `Job Code`, Earnings_filtered, mean)
@@ -343,19 +380,22 @@ Earnings_extended <- full_join(ave_other_ben, Earnings_extended, by = "Job Code"
 Earnings_extended <- full_join(ave_ben, Earnings_extended, by = "Job Code", copy = FALSE )
 Earnings_extended <- full_join(ave_comp, Earnings_extended, by = "Job Code", copy = FALSE )
 
-head(Earnings_extended)
+head(Earnings_extended,6)
 ```
 
 
 Once we have created our table of averages, Earnings_extended, we randomly select 70% of its data and create a model to see if we can predict a job's Total Benfits from the other variables of a job's pay. 
 ```{r}
+set.seed(123)
+
 #random picking 70% of the data
 sample_selection <- Earnings_extended$`Total Benefits` %>% createDataPartition(p = 0.7, list = FALSE)
 
 train <-Earnings_extended[sample_selection, ]
 test <-Earnings_extended[-sample_selection,]
 
-train_model <- lm(data=Earnings_extended, formula=`Total Benefits` ~ Salaries + `Other Salaries`+ Retirement + `Health and Dental`+ `Other Benefits` + `Total Compensation`, date = train)
+suppressWarnings(train_model <- lm(data=Earnings_extended, formula=`Total Benefits` ~ Salaries + `Other Salaries`+ Retirement + `Health and Dental`+ `Other Benefits` + `Total Compensation`, date = train))
+
 summary(train_model)
 
 predictions <- train_model %>% predict(test)
@@ -365,7 +405,7 @@ ggplot(data = test, aes(x=predictions, y = `Total Benefits`)) + geom_point() + s
 
 #r^2: how strong the correlation is
 #(root it, 1 being stronger correlation)
-R2 <- R2(predictions, test$`Total Benefits`)
+R2 <- caret::R2(predictions, test$`Total Benefits`)
 R2
 
 #MAE: Mean absolute error - tells how big an error we can expect
@@ -376,5 +416,8 @@ MAE
 
 **Model Results**
 
-Our model shows that the Total Benefits has a very strong correlation to a job's compensation, with a r^2 value of 0.9987062%, 1 being the strongest. We have a large MAE which makes sense as we have a large range of total benefits. It is no surprise the Total Benfits of a job is relevant to it's compensation, because the benefit package is already predetermined.
+With all p-values less than .05, we have strong evidence against the null hypothesis, which means these values have signifigance between each other. In other words, our total benfits is dependent on Total Salary and Total Compensation. For every 1 unit of salary, one's benefit will be .011969 less and for 1 unit of other salaries, total benifts will reduce by .026607. On the other hand, if 1 unit of health and dental is added, total benifits will go up by 1.066101.
+
+Our model shows that the Total Benefits has a very strong correlation to a job's compensation, with a $r^2$ value of 0.9987062, 1 being the strongest. This means we can can predict a job's total benefit about 100% of the time based on a its salary, other salaries, retirement benefits, health and dental benefits, other benefits, and total compensation. We have a large MAE which makes sense as we have a large range of total benefits. It is no surprise the Total Benfits of a job is relevant to it's compensation, because the benefit package is already predetermined.
+
 

@@ -15,15 +15,17 @@ The San Francisco City Employee Compensation dataset has a record of about 102,6
 
 The San Francisco City Employee Compensation dataset gives a look of how the city jobs are organized and how much workers get paid.
 
-https://introdsci.github.io/DataScience-maklh899/deliverable1/
+[link](https://introdsci.github.io/DataScience-maklh899/deliverable1/)
 
 ### 2. Model Planning and Building
 
 Looks at San Francisco City Job openings from the official website and see if we can predicts job benefits.
 
-https://introdsci.github.io/DataScience-maklh899/deliverable2/
+[link](https://introdsci.github.io/DataScience-maklh899/deliverable2/)
 
 ### 3. Results and Operationalization
 
-Coming soon...
+Use our newly discoveres information to make actions and actions which can hopefully benefit the city of San Francisco.
+
+[link](https://introdsci.github.io/DataScience-maklh899/deliverable3/)
 

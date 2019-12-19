@@ -1,0 +1,113 @@
+---
+title: "SF City Employee Compensation Part 3"
+author: "Makena Haroldson"
+date: "December 20, 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+### _**Review:**_ 
+
+Previously, in our first deliverable, we saw the hiearchary of city jobs of San Francsico and their organizations that they are within, as well as viewing the the job listings of them. In our secound deliverable, we saw that we can predict a job's total benefit based on its salaries, other benefits, and its total compensation. Now, we are going to research if we can predict a job's total compensation based on what organization they are in, the amount of employees in that organization, and the year. By doing so, we may be able to see if a job's compensation is based on how impacted their organization is.
+
+To start off, we will need to import the last two deliverables and any libraries we will need.
+
+```{r p1}
+include <- function(library_name){
+  if( !(library_name %in% installed.packages()) )
+    install.packages(library_name) 
+  library(library_name, character.only=TRUE)
+}
+
+suppressMessages(include("tidyverse"))
+suppressMessages(include("knitr"))
+suppressMessages(include("rvest"))
+suppressMessages(include("tidyr"))
+
+#links our first deliverable here
+suppressMessages(purl("deliverable1.Rmd", output = "part1.r"))
+suppressMessages(source("part1.r"))
+
+#links our second deliverable here
+suppressMessages(purl("deliverable2.Rmd", output = "part2.r"))
+suppressWarnings(source("part2.r"))
+```
+
+
+### _**Part 1: Modeling Data cont.**_
+
+To be able to make the model to find if there is a correlation between compensation and the organization and their employement, we need to make a table that has the averages of pay and the number of employees for each organization by each year.
+
+NOTE*: there are negative numbers that we will exlude when finding the averages of our financial columns.
+```{r p2}
+
+Organizations_info <- Employee_Compensation %>%  group_by(`Organization Group`,`Year`) %>% filter(`Salaries` > 0 & `Overtime`>=0 & `Other Salaries`>=0 & `Total Salary`>0 & `Retirement` >= 0 & `Health and Dental` >= 0& `Other Benefits`>=0 & `Total Benefits`>0 & `Total Compensation` > 0 & Year <= 2019) %>% summarize(Employee_total = n_distinct(`Employee Identifier`, na.rm=T), Salaries_ave = mean(`Salaries`), Overtime_ave = mean(`Overtime`), Other_Salaries_ave = mean(`Other Salaries`),Total_Salary_ave = mean(`Total Salary`), Retirement_ave = mean(`Retirement`), Health_ave = mean(`Health and Dental`), Other_Benefits_ave = mean(`Other Benefits`), Total_Benefits_ave = mean(`Total Benefits`), Total_Compensation_ave = mean(`Total Compensation`))
+
+#View(Organizations_info)
+Organizations_info
+
+Comp_plot <- ggplot(Organizations_info, aes(Year, Total_Compensation_ave, color = `Organization Group`)) + geom_line() + scale_x_discrete(name = "Year", breaks = seq(2013, 2019, by = 1), limits =seq(2013, 2019, by = 1))
+
+Comp_plot
+
+Emp_plot <- ggplot(Organizations_info, aes(Year, Employee_total, color = `Organization Group`)) + geom_line() + scale_x_discrete(name = "Year", breaks = seq(2013, 2019, by = 1), limits =seq(2013, 2019, by = 1))
+
+Emp_plot
+
+Over_plot <- ggplot(Organizations_info, aes(Year, Overtime_ave, color = `Organization Group`)) + geom_line() + scale_x_discrete(name = "Year", breaks = seq(2013, 2019, by = 1), limits =seq(2013, 2019, by = 1))
+
+Over_plot
+
+
+```
+
+Through visualizations, we see the organization's employee totals and average compensations from 2013 to 2019. We also interestingly see that the General City Responsibilities organization had dramatic increase of employees in 2017 while all the others decrease. We do not know why, however we could probably make a good guess that it is a fairly new organization where the city redistributed departments and jobs. Another fascinating finding is that Public Protection's overtime average is exceptionally greater than everyone else's.
+
+Now we will be making our model to find if there is any correlation to Total Compensation.
+```{r p3}
+set.seed(763)
+
+#random picking 70% of the data
+sample2_selection <- Organizations_info$Total_Compensation_ave %>% createDataPartition(p = 0.7, list = FALSE)
+
+train2 <-Organizations_info[sample2_selection,]
+test2 <-Organizations_info[-sample2_selection,]
+
+train2_model <- lm(data=train2, formula=Total_Compensation_ave ~ Year +`Organization Group` + Employee_total ,  na.action=na.exclude)
+
+summary(train2_model)
+
+predictions2 <- train2_model %>% predict(test2)
+
+ggplot(data = test2, aes(x=predictions2, y = Total_Compensation_ave)) + geom_point() + scale_x_continuous(name = "Organization, Employee total, Year") + geom_smooth(method = "lm")
+
+#r^2: how strong the correlation is
+#(root it, 1 being stronger correlation)
+R2 <- caret::R2(predictions2, test2$Total_Compensation_ave)
+R2
+
+#MAE: Mean absolute error - tells how big an error we can expect the smaller the number, the more accurate
+MAE <-MAE(predictions2, test2$Total_Compensation_ave)
+MAE
+
+#RMSE: Root Mean Square Error - measure of how spread out the prediction errors(r^2) are
+RMSE <-RMSE(predictions2, test2$Total_Compensation_ave)
+RMSE
+```
+
+
+**Model Results**
+
+Our p-value for our predicting values are all pretty small, most being less than .5, except for Human Welfare & Neighborhood Development and Public Works, Transportation & Commerce Organization Groups. This means these predicters have signifigance between each other a job's compensation is dependent on their organization group, the amount of employees in them, and the year. Respectively, as 1 year goes by, one's compensation increases by \$5104 and when a new person gets a job, a person's compensation would go up by \$6.27. For organization groups, if a person joins the Public Protection (ex. legal courts and police), their compensation will be increase about \$49988. However, if someone works in Public Works, Transportation, and Commerce(ex. airport and MTA) their compensation will be \$7731 less than others, as well as General City Responsibilities (ex. Court-Judge and Traffic Survey Technician) which will decrease by \$25884.
+
+Most of our variables are somewhat significant with an $r^2$ of 82%. This means that using the year, an organization's employement total, the distinguishing the organization, itself, we can estimate about 82% of how much a job's compensation will be. On the other hand, our mean absolute error is large so our model is not fully accurate.
+
+
+### _**Part 2: Operationalization**_
+
+Previously in deliverable 1, I wanted to see what are main factors of a job will make people want to work for the city of San Francisco and how could we promote these city jobs? Although we did not collect enough information to make fully developed decisions, we can use the data we collected to make ideas. We now know the total compensation of jobs positively correlated to most of the organization groups. This is most likely because certain jobs have different levels of skill that are required. The group being paid the most is Public Protection where its type of jobs includes firefighter, police officers, and people in the court system, while the least paid group is Culture and Recreation ranges from being a park ranger, librarian, or custodian. Overall, we see that Culture and Recreation, Human Welfare & Neighborhood Development (public service aide and health workers), and General Administration & Finance (accounting and attorneys) are not only the least populated but also the least paid. 
+
+From the newest model we did find that there is a slight positive correlation between a job's total compensation and their organization's employement total. By this discovery, we could increase the amount of jobs in these groups, however, there are major flaws to this proposal. Just because we increase the jobs does not mean more people will be able to work for them. These jobs have skill requirements especially attorneys and accountents that are needed, but of course, if someone has the skills and intelligence for them, why not work for a private company where they could have a much better income. To solve this complication, we can increase the pay of these jobs, but this will lead us to the problem of what would be the source of this money. 
+
+We saw how drasticlly greater Public Protection's overtime average was to all the other groups so one idea could be to decrease the amount of hours these employees can work overtime and give this money to the previously mentioned organizations. That means less workers working at a time, which could be either good or bad. If we put this policy into place, we definitly need to watch crime rates and fire statistics. Will crime rates increase, if so was it because there were less cops on duty or because those on duty did not have back up. Are fires and emergencies still quickly handled or instead is there an increase in fatalities because the situations were handled slowly. These are the social implications that may happen and so after collecting new data, we need to reanalyze it and see the changes that have occured.
